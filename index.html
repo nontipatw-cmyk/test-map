@@ -168,7 +168,7 @@ function goHome() {
 compassBtn.addEventListener("click", smoothResetRotation);
 
 // ===== GeoJSON =====
-fetch('data.geojson')
+fetch('data.json')
 .then(res => res.json())
 .then(data => {
     L.geoJSON(data, {
