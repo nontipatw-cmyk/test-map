@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PNRU Smart Map</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        html, body { height: 100%; margin: 0; padding: 0; font-family: 'Sarabun', sans-serif; }
+        #map { height: 100vh; width: 100%; }
+
+        .custom-label {
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 2px solid #1a73e8 !important;
+            border-radius: 8px !important;
+            padding: 5px 10px !important;
+            font-size: 13.5px !important;
+            font-weight: 700 !important;
+            color: #111 !important;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.3) !important;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        .locate-button,
+        .home-button {
+            position: absolute;
+            right: 25px;
+            z-index: 1000;
+            background: white;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 24px;
+            color: #1a73e8;
+        }
+
+        .home-button {
+            bottom: 90px;
+        }
+
+        .locate-button {
+            bottom: 25px;
+        }
+
+        /* เข็มทิศ */
+        .compass {
+            position: absolute;
+            bottom: 25px;
+            left: 25px;
+            z-index: 1000;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .compass i {
+            font-size: 26px;
+            color: #e53935;
+            transition: transform 0.2s linear;
+        }
+    </style>
+</head>
+
+<body>
+<div id="map"></div>
+
+<div class="home-button" onclick="goHome()">
+    <i class="fa-solid fa-house"></i>
+</div>
+
+<div class="locate-button" onclick="locateUser()">
+    <i class="fa-solid fa-crosshairs"></i>
+</div>
+
+<div class="compass" id="compassBtn">
+    <i class="fa-solid fa-location-arrow" id="compassIcon"></i>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-rotate@0.2.1/dist/leaflet-rotate-src.js"></script>
+
+<script>
+const map = L.map('map', { 
+    zoomControl: false,
+    rotate: true,
+    touchRotate: true,
+    touchAngle: true,
+    bearing: 0
+}).setView([13.878, 100.591], 17);
+
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}').addTo(map);
+
+// ===== ปุ่มหมุน =====
+const rotationControl = L.control({ position: 'topright' });
+
+rotationControl.onAdd = function() {
+    const div = L.DomUtil.create('div');
+    div.innerHTML = `
+        <div style="background:white; padding:8px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.3); display:flex; flex-direction:column; gap:6px;">
+            <button onclick="rotateMap(30)">↻</button>
+            <button onclick="rotateMap(-30)">↺</button>
+            <button onclick="resetRotation()">Reset</button>
+        </div>
+    `;
+    return div;
+};
+rotationControl.addTo(map);
+
+function rotateMap(deg) {
+    map.setBearing(map.getBearing() + deg);
+}
+
+function resetRotation() {
+    map.setBearing(0);
+}
+
+// ===== เข็มทิศ =====
+const compass = document.getElementById("compassIcon");
+const compassBtn = document.getElementById("compassBtn");
+
+// หมุนเข็มทิศ (สำคัญ: ติดลบ)
+map.on("rotate", function() {
+    const bearing = map.getBearing();
+    compass.style.transform = `rotate(${-bearing}deg)`;
+});
+
+// reset แบบลื่น
+function smoothResetRotation() {
+    let start = map.getBearing();
+    let duration = 300;
+    let startTime = null;
+
+    function animate(time) {
+        if (!startTime) startTime = time;
+        let progress = time - startTime;
+        let percent = Math.min(progress / duration, 1);
+
+        map.setBearing(start * (1 - percent));
+
+        if (percent < 1) requestAnimationFrame(animate);
+    }
+
+    requestAnimationFrame(animate);
+}
+
+function goHome() {
+    map.flyTo([13.878, 100.591], 17);
+    smoothResetRotation();
+}
+
+compassBtn.addEventListener("click", smoothResetRotation);
+
+// ===== GeoJSON =====
+fetch('data.geojson')
+.then(res => res.json())
+.then(data => {
+    L.geoJSON(data, {
+        style: function(feature) {
+            const text = JSON.stringify(feature.properties || {}).toLowerCase();
+            if (text.includes("ประตู")) return { color: "#ff4757", fillColor: "#ff4757", fillOpacity: 0.55 };
+            if (text.includes("โรงอาหาร")) return { color: "#ff9800", fillColor: "#ff9800", fillOpacity: 0.6 };
+            if (text.includes("ที่นั่ง")) return { color: "#2ed573", fillColor: "#2ed573", fillOpacity: 0.4 };
+            return { color: "#1e90ff", fillColor: "#1e90ff", fillOpacity: 0.5 };
+        },
+        onEachFeature: function(feature, layer) {
+            const name = feature.properties.name || "ไม่มีชื่อ";
+            const desc = feature.properties.desc || "";
+
+            layer.bindTooltip(name, {
+                permanent: true,
+                direction: 'center',
+                className: 'custom-label'
+            });
+
+            layer.bindPopup(`<b>${name}</b><br>${desc}`);
+        }
+    }).addTo(map);
+});
+
+// ===== GPS =====
+let userMarker, userCircle;
+
+function locateUser() {
+    map.locate({ setView: true, maxZoom: 18 });
+}
+
+map.on('locationfound', function(e) {
+    if (userMarker) map.removeLayer(userMarker);
+    if (userCircle) map.removeLayer(userCircle);
+
+    userMarker = L.marker(e.latlng).addTo(map)
+        .bindPopup("คุณอยู่ที่นี่")
+        .openPopup();
+
+    userCircle = L.circle(e.latlng, {
+        radius: e.accuracy / 2
+    }).addTo(map);
+});
+
+// ===== เม้าขวาหมุน =====
+let isRightDragging = false;
+let lastX = 0;
+
+const container = map.getContainer();
+
+container.addEventListener('mousedown', function(e) {
+    if (e.button === 2) {
+        isRightDragging = true;
+        lastX = e.clientX;
+    }
+});
+
+container.addEventListener('mousemove', function(e) {
+    if (isRightDragging) {
+        let dx = e.clientX - lastX;
+        map.setBearing(map.getBearing() + dx * 0.8);
+        lastX = e.clientX;
+    }
+});
+
+container.addEventListener('mouseup', () => isRightDragging = false);
+document.addEventListener('mouseup', () => isRightDragging = false);
+
+container.addEventListener('contextmenu', e => e.preventDefault());
+
+locateUser();
+</script>
+</body>
+</html>
